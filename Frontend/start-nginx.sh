@@ -9,9 +9,9 @@ if [ -z "$PORT" ]; then
     export PORT=80
 fi
 
-# Substitute $PORT in the configuration
-echo "Substituting PORT in nginx.conf..."
-envsubst '$PORT' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
+# Substitute $PORT and $BACKEND_URL in the configuration
+echo "Substituting PORT and BACKEND_URL in nginx.conf..."
+envsubst '$PORT $BACKEND_URL' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
 
 # Start Nginx
 echo "Starting nginx..."

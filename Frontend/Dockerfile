@@ -23,9 +23,14 @@ FROM nginx:alpine
 COPY --from=0 /app/dist /usr/share/nginx/html
 
 # Copy custom nginx configuration as a template
+# Copy custom nginx configuration as a template
 COPY nginx.conf /etc/nginx/nginx.conf.template
+
+# Copy the startup script
+COPY start-nginx.sh /start-nginx.sh
+RUN chmod +x /start-nginx.sh
 
 EXPOSE 80
 
-# Substitute $PORT in the configuration and start nginx
-CMD ["/bin/sh", "-c", "envsubst '$PORT' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"]
+# Start nginx using the script
+CMD ["/start-nginx.sh"]

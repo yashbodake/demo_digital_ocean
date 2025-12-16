@@ -35,7 +35,8 @@ export default {
       this.loading = true;
       try {
         // Use the backend API endpoint
-        const response = await axios.get('/api/hello'); // Using proxy in dev
+        const apiUrl = process.env.VUE_APP_API_URL || '';
+        const response = await axios.get(`${apiUrl}/api/hello`);
         this.message = response.data.message;
       } catch (error) {
         console.error('Error fetching message:', error);

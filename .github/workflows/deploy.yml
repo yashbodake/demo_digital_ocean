@@ -65,11 +65,11 @@ jobs:
             docker stop backend-api || true
             docker rm backend-api || true
 
-            # Run new container (Mapped 80:8000)
+            # Run new container (Mapped 8000:8000)
             docker run -d \
               --name backend-api \
               --restart always \
-              -p 80:8000 \
+              -p 8000:8000 \
               $IMAGE_URL:latest
 
   # ------------------------------------------------------------------

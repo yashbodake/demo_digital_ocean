@@ -1,4 +1,4 @@
-name: Deploy to DigitalOcean
+name: Deploy Multi-Architecture
 
 on:
   push:
@@ -10,12 +10,14 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push:
+  # ------------------------------------------------------------------
+  # BACKEND JOB: Build Docker Image, Push to GHCR, Deploy to Droplet
+  # ------------------------------------------------------------------
+  deploy-backend:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,48 +34,75 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest
-            type=sha
+          tags: type=raw,value=latest
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./Backend
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Deploy to Droplet
+      - name: Deploy to Droplet via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DO_HOST }}
           username: ${{ secrets.DO_USERNAME }}
           key: ${{ secrets.DO_SSH_KEY }}
           script: |
-            # Convert repository name to lowercase for Docker image
+            # Convert repo name to lowercase for Docker image
             REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
             IMAGE_URL="ghcr.io/$REPO_LOWER"
 
-            # Login to GHCR (using GITHUB_TOKEN passed from the runner)
+            # Login to GHCR
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Pull the latest image
+            # Pull latest image
             docker pull $IMAGE_URL:latest
 
             # Stop and remove existing container
-            docker stop demo-app || true
-            docker rm demo-app || true
+            docker stop backend-api || true
+            docker rm backend-api || true
 
-            # Run new container
-            # Mapping port 80 on host to 8000 on container (where app runs)
+            # Run new container (Mapped 80:8000)
             docker run -d \
-              --name demo-app \
-              --restart unless-stopped \
+              --name backend-api \
+              --restart always \
               -p 80:8000 \
               $IMAGE_URL:latest
+
+  # ------------------------------------------------------------------
+  # FRONTEND JOB: Build Static Site, Sync to DigitalOcean Spaces
+  # ------------------------------------------------------------------
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install and Build
+        run: |
+          cd Frontend
+          npm install
+          npm run build
+        env:
+          # Inject API URL from secrets or default to Droplet IP
+          VUE_APP_API_URL: http://${{ secrets.DO_HOST }}
+
+      - name: Upload to DigitalOcean Spaces
+        # Using AWS CLI which is pre-installed on GitHub Runners
+        run: |
+          aws s3 sync Frontend/dist s3://${{ secrets.DO_SPACES_BUCKET }} \
+            --acl public-read \
+            --endpoint-url https://${{ secrets.DO_SPACES_ENDPOINT }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET }}
+          # Region is required by boto3 but often ignored by Spaces, set to generic or specific
+          AWS_DEFAULT_REGION: us-east-1

@@ -1,23 +1,39 @@
 services:
   backend:
+    image: ghcr.io/yashbodake/demo_digital_ocean:latest
     build:
       context: ./Backend
-    ports:
-      - "8000:8000"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/docs" ]
       interval: 30s
       timeout: 10s
       retries: 3
+
+  caddy:
+    image: caddy:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
 
   frontend:
     build:
       context: ./Frontend
     ports:
-      - "80:80"
+      - "8080:80"
     environment:
       - BACKEND_URL=http://backend:8000
     depends_on:
       - backend
     restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

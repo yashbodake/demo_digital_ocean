@@ -1,0 +1,3 @@
+api.tech00000.online {
+    reverse_proxy backend:8000
+}

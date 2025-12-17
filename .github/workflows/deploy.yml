@@ -44,6 +44,15 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+      - name: Copy config files to Droplet
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USERNAME }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          source: "docker-compose.yml,Caddyfile"
+          target: "~/app"
+
       - name: Deploy to Droplet via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -51,26 +60,22 @@ jobs:
           username: ${{ secrets.DO_USERNAME }}
           key: ${{ secrets.DO_SSH_KEY }}
           script: |
-            # Convert repo name to lowercase for Docker image
-            REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-            IMAGE_URL="ghcr.io/$REPO_LOWER"
+            # Navigate to app directory
+            mkdir -p ~/app
+            cd ~/app
 
-            # Login to GHCR
+            # Login to GHCR (needed to pull the private image)
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Pull latest image
-            docker pull $IMAGE_URL:latest
+            # Pull latest images
+            docker-compose pull
 
-            # Stop and remove existing container
-            docker stop backend-api || true
-            docker rm backend-api || true
+            # Start services (Caddy + Backend)
+            # --remove-orphans cleans up old containers not in the compose file
+            docker-compose up -d --remove-orphans
 
-            # Run new container (Mapped 8000:8000)
-            docker run -d \
-              --name backend-api \
-              --restart always \
-              -p 8000:8000 \
-              $IMAGE_URL:latest
+            # Prune unused images to save space
+            docker image prune -f
 
   # ------------------------------------------------------------------
   # FRONTEND JOB: Build Static Site, Sync to DigitalOcean Spaces
@@ -92,8 +97,8 @@ jobs:
           npm install
           npm run build
         env:
-          # Inject API URL from secrets or default to Droplet IP
-          VUE_APP_API_URL: http://${{ secrets.DO_HOST }}
+          # HTTPS URL for the backend
+          VUE_APP_API_URL: https://api.tech00000.online
 
       - name: Upload to DigitalOcean Spaces
         # Using AWS CLI which is pre-installed on GitHub Runners
@@ -104,5 +109,4 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET }}
-          # Region is required by boto3 but often ignored by Spaces, set to generic or specific
           AWS_DEFAULT_REGION: us-east-1

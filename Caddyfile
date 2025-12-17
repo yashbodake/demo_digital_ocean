@@ -3,6 +3,7 @@ api.tech00000.online {
 }
 
 ui.tech00000.online {
+    rewrite / /index.html
     reverse_proxy https://app-hello.blr1.cdn.digitaloceanspaces.com {
         header_up Host {upstream_hostport}
     }

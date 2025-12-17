@@ -1,3 +1,9 @@
 api.tech00000.online {
     reverse_proxy backend:8000
 }
+
+ui.tech00000.online {
+    reverse_proxy https://app-hello.blr1.cdn.digitaloceanspaces.com {
+        header_up Host {upstream_hostport}
+    }
+}

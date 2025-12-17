@@ -50,7 +50,7 @@ jobs:
           host: ${{ secrets.DO_HOST }}
           username: ${{ secrets.DO_USERNAME }}
           key: ${{ secrets.DO_SSH_KEY }}
-          source: "docker-compose.yml,Caddyfile"
+          source: "docker-compose.prod.yml,Caddyfile"
           target: "~/app"
 
       - name: Deploy to Droplet via SSH
@@ -63,16 +63,19 @@ jobs:
             # Navigate to app directory
             mkdir -p ~/app
             cd ~/app
+            
+            # Rename prod compose to standard name so docker defaults work
+            mv docker-compose.prod.yml docker-compose.yml
 
             # Login to GHCR (needed to pull the private image)
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             # Pull latest images
-            docker-compose pull
+            docker compose pull
 
             # Start services (Caddy + Backend)
             # --remove-orphans cleans up old containers not in the compose file
-            docker-compose up -d --remove-orphans
+            docker compose up -d --remove-orphans
 
             # Prune unused images to save space
             docker image prune -f
